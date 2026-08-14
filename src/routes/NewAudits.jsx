@@ -13,13 +13,33 @@ export default function NewAudits() {
   useEffect(() => {
     getAudits()
       .then(res => {
-        const all = res.data || res;
+        const all = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const userId = String(user?.id || user?._id || '');
+        const userEmail = user?.email?.toLowerCase();
+        const userName = (user?.full_name || user?.username || '').toLowerCase();
+
         const myNew = all.filter(a => {
-          const isMine =
-            a.inspector_id?._id === user?.id ||
-            a.inspector_id === user?.id ||
-            a.auditors?.some(aud => aud._id === user?.id || aud.id === user?.id);
-          const isNew = !['inspection_completed', 'done', 'complete'].some(s => a.status?.includes(s));
+          const inspectorIdStr = String(a.inspector_id?._id || a.inspector_id?.id || a.inspector_id || '');
+          const inspectorEmail = a.inspector_id?.email?.toLowerCase();
+
+          const matchesInspector = userId && inspectorIdStr === userId;
+          const matchesInspectorEmail = userEmail && inspectorEmail && inspectorEmail === userEmail;
+
+          const matchesAuditors = Array.isArray(a.auditors) && a.auditors.some(aud => {
+            const audIdStr = String(aud?._id || aud?.id || aud || '');
+            const audEmail = aud?.email?.toLowerCase();
+            const audName = (aud?.name || aud?.full_name || '').toLowerCase();
+
+            return (
+              (userId && audIdStr === userId) ||
+              (userEmail && audEmail && audEmail === userEmail) ||
+              (userName && audName && audName === userName)
+            );
+          });
+
+          // Show audit if explicitly assigned, or if user is logged in and no restricted auditor is assigned
+          const isMine = matchesInspector || matchesInspectorEmail || matchesAuditors || (!a.inspector_id && (!a.auditors || a.auditors.length === 0));
+          const isNew = !['inspection_completed', 'done', 'complete'].some(s => (a.status || '').toLowerCase().includes(s));
           return isMine && isNew;
         });
         setAudits(myNew);

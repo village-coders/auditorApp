@@ -13,12 +13,32 @@ export default function ManageAudits() {
   useEffect(() => {
     getAudits()
       .then(res => {
-        const all = res.data || res;
-        const mine = all.filter(a =>
-          a.inspector_id?._id === user?.id ||
-          a.inspector_id === user?.id ||
-          a.auditors?.some(aud => aud._id === user?.id || aud.id === user?.id)
-        );
+        const all = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const userId = String(user?.id || user?._id || '');
+        const userEmail = user?.email?.toLowerCase();
+        const userName = (user?.full_name || user?.username || '').toLowerCase();
+
+        const mine = all.filter(a => {
+          const inspectorIdStr = String(a.inspector_id?._id || a.inspector_id?.id || a.inspector_id || '');
+          const inspectorEmail = a.inspector_id?.email?.toLowerCase();
+
+          const matchesInspector = userId && inspectorIdStr === userId;
+          const matchesInspectorEmail = userEmail && inspectorEmail && inspectorEmail === userEmail;
+
+          const matchesAuditors = Array.isArray(a.auditors) && a.auditors.some(aud => {
+            const audIdStr = String(aud?._id || aud?.id || aud || '');
+            const audEmail = aud?.email?.toLowerCase();
+            const audName = (aud?.name || aud?.full_name || '').toLowerCase();
+
+            return (
+              (userId && audIdStr === userId) ||
+              (userEmail && audEmail && audEmail === userEmail) ||
+              (userName && audName && audName === userName)
+            );
+          });
+
+          return matchesInspector || matchesInspectorEmail || matchesAuditors || (!a.inspector_id && (!a.auditors || a.auditors.length === 0));
+        });
         setAudits(mine);
       })
       .catch(console.error)
