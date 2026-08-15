@@ -135,7 +135,7 @@ export default function AuditDetail() {
             style={{ marginTop: 12, borderRadius: 14, padding: '14px' }}
           >
             <CheckCircle size={18} />
-            Mark as Completed
+            Mark as Audited
           </button>
         )}
 
@@ -149,9 +149,9 @@ export default function AuditDetail() {
 
       {showConfirm && (
         <ConfirmDialog
-          title="Complete Audit"
-          message="Mark this audit as clean and complete with no non-conformances found?"
-          confirmLabel="Yes, Complete"
+          title="Mark as Audited"
+          message="Mark this audit as audited and clean with no non-conformances found?"
+          confirmLabel="Yes, Mark as Audited"
           onConfirm={handleComplete}
           onCancel={() => setShowConfirm(false)}
         />
