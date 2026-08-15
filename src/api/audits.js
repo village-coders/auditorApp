@@ -23,3 +23,8 @@ export const flagNc = async (auditId, applicationId, text, file) => {
   if (!res.ok) throw new Error(data?.error || 'Failed to flag NC');
   return data;
 };
+
+export const closeNc = (auditId, applicationId, reportId, note) => apiClient('/audits/nc-close', {
+  method: 'POST',
+  body: JSON.stringify({ audit_id: auditId, application_id: applicationId, report_id: reportId, note })
+});

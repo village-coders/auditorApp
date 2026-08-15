@@ -2,20 +2,21 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { completeAudit, flagNc } from '../api/audits';
+import { completeAudit, flagNc, closeNc } from '../api/audits';
 import { getFileUrl } from '../api/client';
 import {
   ArrowLeft, Calendar, Users, CheckCircle, Clock,
   AlertTriangle, Plus, FileText, X, ChevronDown,
-  ChevronUp, ExternalLink, MessageSquare, Paperclip
+  ChevronUp, ExternalLink, MessageSquare, Paperclip,
+  CheckCheck, ShieldCheck
 } from 'lucide-react';
 
 /* ---------- NC status helpers ---------- */
 const NC_STATUS_STYLES = {
-  flagged:          { label: 'Flagged',            bg: '#fef2f2', color: '#dc2626', dot: '#dc2626' },
-  corrected:        { label: 'Corrected by Client', bg: '#fffbeb', color: '#d97706', dot: '#d97706' },
-  client_responded: { label: 'Client Responded',   bg: '#fffbeb', color: '#d97706', dot: '#d97706' },
-  closed:           { label: 'Closed',             bg: '#f0fdf4', color: '#16a34a', dot: '#16a34a' },
+  flagged:          { label: 'Flagged (Awaiting Correction)', bg: '#fef2f2', color: '#dc2626', dot: '#dc2626' },
+  corrected:        { label: 'Correction Submitted',          bg: '#fffbeb', color: '#d97706', dot: '#d97706' },
+  client_responded: { label: 'Correction Submitted',          bg: '#fffbeb', color: '#d97706', dot: '#d97706' },
+  closed:           { label: 'Closed & Resolved',             bg: '#f0fdf4', color: '#16a34a', dot: '#16a34a' },
 };
 
 function NcBadge({ status }) {
@@ -29,32 +30,52 @@ function NcBadge({ status }) {
 }
 
 /* ---------- Single NC card ---------- */
-function NcCard({ nc, index }) {
-  const [open, setOpen] = useState(false);
+function NcCard({ nc, index, auditId, appId, onNcClosed, isAuditComplete }) {
+  const [open, setOpen] = useState(true);
+  const [closing, setClosing] = useState(false);
   const hasCorrectionDoc = nc.correction_document_url || nc.client_response_url;
   const hasResponse = nc.client_response || hasCorrectionDoc;
   const isResponded = nc.status === 'corrected' || nc.status === 'client_responded' || nc.status === 'closed';
+  const isClosed = nc.status === 'closed';
+
+  const handleClose = async (e) => {
+    e.stopPropagation();
+    if (closing || isClosed) return;
+    setClosing(true);
+    try {
+      await closeNc(auditId, appId, nc._id);
+      onNcClosed(nc._id);
+    } catch (err) {
+      alert(err.message || 'Failed to close NC');
+    } finally {
+      setClosing(false);
+    }
+  };
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', background: 'var(--card-bg)' }}>
+    <div style={{ border: `1.5px solid ${isClosed ? '#bbf7d0' : (isResponded ? '#fde68a' : '#fecaca')}`, borderRadius: 14, overflow: 'hidden', background: 'var(--card-bg)' }}>
       {/* Header row */}
       <div
         onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 14px', cursor: 'pointer' }}
       >
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-          <AlertTriangle size={14} color="#dc2626" />
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: isClosed ? '#dcfce7' : (isResponded ? '#fef3c7' : '#fee2e2'), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+          {isClosed ? (
+            <ShieldCheck size={16} color="#16a34a" />
+          ) : (
+            <AlertTriangle size={15} color={isResponded ? '#d97706' : '#dc2626'} />
+          )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 500 }}>NC #{index + 1}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>NC #{index + 1}</span>
             <NcBadge status={nc.status} />
           </div>
           <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', margin: 0, lineHeight: 1.4 }}>
             {nc.text || 'Non-Conformity Report'}
           </p>
         </div>
-        <div style={{ flexShrink: 0 }}>
+        <div style={{ flexShrink: 0, marginLeft: 4 }}>
           {open ? <ChevronUp size={16} color="var(--text-3)" /> : <ChevronDown size={16} color="var(--text-3)" />}
         </div>
       </div>
@@ -88,7 +109,7 @@ function NcCard({ nc, index }) {
           {isResponded && (
             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 12px' }}>
               <p style={{ fontSize: 11, color: '#15803d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px 0' }}>
-                Client Correction
+                Client Correction Details
               </p>
               {nc.client_response && (
                 <p style={{ fontSize: 13, color: '#166534', margin: '0 0 8px 0', lineHeight: 1.5 }}>
@@ -107,7 +128,7 @@ function NcCard({ nc, index }) {
               )}
               {nc.corrected_at && (
                 <p style={{ fontSize: 11, color: '#16a34a', margin: '8px 0 0 0' }}>
-                  Submitted: {new Date(nc.corrected_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  Submitted on: {new Date(nc.corrected_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
               )}
             </div>
@@ -116,7 +137,43 @@ function NcCard({ nc, index }) {
           {!isResponded && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
               <MessageSquare size={13} color="#d97706" />
-              <span style={{ fontSize: 12, color: '#92400e' }}>Awaiting client correction</span>
+              <span style={{ fontSize: 12, color: '#92400e' }}>Awaiting client correction document/reply</span>
+            </div>
+          )}
+
+          {/* Action button to Close NC */}
+          {!isAuditComplete && !isClosed && (
+            <div style={{ marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={closing}
+                style={{
+                  width: '100%',
+                  background: '#16a34a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '10px 14px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: closing ? 'not-allowed' : 'pointer',
+                  opacity: closing ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
+                }}
+              >
+                <CheckCheck size={16} />
+                {closing ? 'Closing NC...' : 'Mark NC as Closed'}
+              </button>
+            </div>
+          )}
+
+          {isClosed && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: '#dcfce7', borderRadius: 8, color: '#15803d', fontSize: 12, fontWeight: 600 }}>
+              <ShieldCheck size={14} color="#16a34a" /> NC marked as Closed & Resolved
             </div>
           )}
         </div>
@@ -153,18 +210,24 @@ export default function AuditDetail() {
   }
 
   const ncReports = Array.isArray(audit.nc_reports) ? audit.nc_reports : [];
-  const hasOpenNc = ncReports.some(r => r.status === 'flagged');
+  const unclosedNcs = ncReports.filter(r => r.status !== 'closed');
+  const hasUnclosedNc = unclosedNcs.length > 0;
   const isComplete = audit.status?.includes('complete') || audit.status?.includes('done') || Boolean(audit.completed_at || audit.completedAt);
+  const appId = audit.application_id?._id || audit.application_id;
 
   /* Mark as Audited */
   const handleComplete = async () => {
+    if (hasUnclosedNc) {
+      alert('Please mark all Non-Conformity reports as Closed before marking the audit as audited.');
+      return;
+    }
     setSubmitting(true);
     try {
       await completeAudit(audit._id || audit.id);
       setAudit(a => ({ ...a, status: 'audit_completed', completed_at: new Date().toISOString() }));
       setShowConfirm(false);
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Failed to complete audit');
     } finally {
       setSubmitting(false);
     }
@@ -177,7 +240,6 @@ export default function AuditDetail() {
     setFlagging(true);
     setFlagError('');
     try {
-      const appId = audit.application_id?._id || audit.application_id;
       const res = await flagNc(audit._id || audit.id, appId, ncText.trim(), ncFile || undefined);
       const updatedNcReports = res.data?.nc_reports || [...ncReports, {
         text: ncText.trim(),
@@ -190,10 +252,28 @@ export default function AuditDetail() {
       setNcFile(null);
       setShowNcForm(false);
     } catch (err) {
-      setFlagError(err.message);
+      setFlagError(err.message || 'Failed to flag NC');
     } finally {
       setFlagging(false);
     }
+  };
+
+  /* Callback when an NC is marked as closed */
+  const handleNcClosed = (reportId) => {
+    setAudit(a => {
+      const updated = (a.nc_reports || []).map(r => {
+        if (!reportId || String(r._id) === String(reportId)) {
+          return { ...r, status: 'closed' };
+        }
+        return r;
+      });
+      const allClosed = updated.every(r => r.status === 'closed');
+      return {
+        ...a,
+        nc_reports: updated,
+        status: allClosed ? 'nc_closed' : a.status
+      };
+    });
   };
 
   /* Date helpers */
@@ -222,9 +302,6 @@ export default function AuditDetail() {
     }
     return names.length ? names.join(', ') : 'You';
   };
-
-  /* All open NC are corrected? */
-  const allNcCorrected = ncReports.length > 0 && !hasOpenNc;
 
   return (
     <>
@@ -339,7 +416,17 @@ export default function AuditDetail() {
           {/* NC list */}
           {ncReports.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {ncReports.map((nc, i) => <NcCard key={nc._id || i} nc={nc} index={i} />)}
+              {ncReports.map((nc, i) => (
+                <NcCard
+                  key={nc._id || i}
+                  nc={nc}
+                  index={i}
+                  auditId={audit._id || audit.id}
+                  appId={appId}
+                  onNcClosed={handleNcClosed}
+                  isAuditComplete={isComplete}
+                />
+              ))}
             </div>
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '20px 16px' }}>
@@ -349,14 +436,27 @@ export default function AuditDetail() {
           )}
         </div>
 
-        {/* Notice when NC has open items */}
-        {hasOpenNc && !isComplete && (
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 1 }} />
+        {/* Warning banner when NCs are unclosed */}
+        {hasUnclosedNc && !isComplete && (
+          <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e', margin: '0 0 3px 0' }}>Open Non-Conformities</p>
-              <p style={{ fontSize: 12, color: '#b45309', margin: 0 }}>
-                There are open NC reports awaiting client correction. You can still mark as audited once corrections are received.
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#991b1b', margin: '0 0 3px 0' }}>Action Required: Close NCs First</p>
+              <p style={{ fontSize: 12, color: '#b91c1c', margin: 0, lineHeight: 1.4 }}>
+                You must review the client's correction and click <strong>"Mark NC as Closed"</strong> on all open NC reports before you can mark this audit as audited.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Success banner when all NCs are closed */}
+        {!hasUnclosedNc && ncReports.length > 0 && !isComplete && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ShieldCheck size={18} color="#16a34a" style={{ flexShrink: 0 }} />
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#166534', margin: '0 0 2px 0' }}>All NCs Closed & Resolved ✅</p>
+              <p style={{ fontSize: 12, color: '#15803d', margin: 0 }}>
+                All non-conformity reports have been closed. You may now proceed to mark this audit as audited.
               </p>
             </div>
           </div>
@@ -366,8 +466,21 @@ export default function AuditDetail() {
         {!isComplete && (
           <button
             className="btn btn-primary"
-            onClick={() => setShowConfirm(true)}
-            style={{ marginTop: 4, borderRadius: 14, padding: '14px' }}
+            onClick={() => {
+              if (hasUnclosedNc) {
+                alert('Please mark all Non-Conformity reports as Closed before marking the audit as audited.');
+                return;
+              }
+              setShowConfirm(true);
+            }}
+            disabled={hasUnclosedNc}
+            style={{
+              marginTop: 4,
+              borderRadius: 14,
+              padding: '14px',
+              opacity: hasUnclosedNc ? 0.5 : 1,
+              cursor: hasUnclosedNc ? 'not-allowed' : 'pointer'
+            }}
           >
             <CheckCircle size={18} />
             Mark as Audited
@@ -385,11 +498,7 @@ export default function AuditDetail() {
       {showConfirm && (
         <ConfirmDialog
           title="Mark as Audited"
-          message={
-            hasOpenNc
-              ? 'There are open NC reports. Mark this audit as audited anyway?'
-              : 'Mark this audit as audited and complete with no outstanding issues?'
-          }
+          message="Mark this audit as audited and clean with all non-conformances resolved and closed?"
           confirmLabel={submitting ? 'Please wait…' : 'Yes, Mark as Audited'}
           onConfirm={handleComplete}
           onCancel={() => setShowConfirm(false)}
