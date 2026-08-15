@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { completeAudit } from '../api/audits';
-import { ArrowLeft, Building2, Calendar, User, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Building2, Calendar, User, Users, CheckCircle, Clock } from 'lucide-react';
 
 export default function AuditDetail() {
   const { state } = useLocation();
@@ -23,7 +23,7 @@ export default function AuditDetail() {
     );
   }
 
-  const isComplete = audit.status?.includes('complete') || audit.status?.includes('done');
+  const isComplete = audit.status?.includes('complete') || audit.status?.includes('done') || Boolean(audit.completed_at || audit.completedAt);
 
   const handleComplete = async () => {
     setSubmitting(true);
@@ -38,12 +38,52 @@ export default function AuditDetail() {
     }
   };
 
-  const date = audit.createdAt
-    ? new Date(audit.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  const rawAssigned = audit.scheduled_date || audit.finalized_date || audit.audit_date || audit.createdAt;
+  const dateAssigned = rawAssigned
+    ? new Date(rawAssigned).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     : '—';
-  const auditDate = audit.audit_date
-    ? new Date(audit.audit_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'TBD';
+
+  const rawConcluded =
+    audit.completed_at ||
+    audit.completedAt ||
+    audit.concluded_at ||
+    audit.concludedAt ||
+    audit.updatedAt ||
+    audit.updated_at ||
+    audit.application_id?.statusHistory?.find(h => (h.status || '').includes('complete') || (h.status || '').includes('done'))?.changedAt ||
+    audit.createdAt ||
+    audit.created_at;
+
+  const dateConcluded = isComplete
+    ? (rawConcluded ? new Date(rawConcluded).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—')
+    : 'In Progress';
+
+  const getAuditorsList = () => {
+    const names = [];
+
+    if (Array.isArray(audit.auditors)) {
+      audit.auditors.forEach(aud => {
+        if (typeof aud === 'string') {
+          const trimmed = aud.trim();
+          if (trimmed && !names.includes(trimmed)) names.push(trimmed);
+        } else if (aud && typeof aud === 'object') {
+          const name = aud.name || aud.full_name;
+          if (name && !names.includes(name)) {
+            const roleStr = aud.role ? ` (${aud.role.replace(/_/g, ' ')})` : '';
+            names.push(`${name}${roleStr}`);
+          }
+        }
+      });
+    } else if (typeof audit.auditors === 'string' && audit.auditors.trim()) {
+      audit.auditors.split(',').forEach(n => {
+        const trimmed = n.trim();
+        if (trimmed && !names.includes(trimmed)) names.push(trimmed);
+      });
+    }
+
+    if (names.length === 0) return 'You';
+    return names.join(', ');
+  };
 
   return (
     <>
@@ -74,15 +114,15 @@ export default function AuditDetail() {
         {/* Info rows */}
         <div className="card" style={{ padding: '4px 16px' }}>
           {[
-            { icon: <User size={15} />, label: 'Inspector', value: audit.inspector_id?.full_name || 'You' },
-            { icon: <Calendar size={15} />, label: 'Audit Date', value: auditDate },
-            { icon: <Calendar size={15} />, label: 'Assigned', value: date },
+            { icon: <Users size={15} />, label: 'Auditor(s)', value: getAuditorsList() },
+            { icon: <Calendar size={15} />, label: 'Date Assigned', value: dateAssigned },
+            { icon: <Clock size={15} />, label: 'Date Concluded', value: dateConcluded },
           ].map(({ icon, label, value }) => (
             <div key={label} className="detail-row">
               <div className="detail-label" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-3)' }}>
                 {icon} {label}
               </div>
-              <div className="detail-value">{value}</div>
+              <div className="detail-value" style={{ textAlign: 'right', fontWeight: 500 }}>{value}</div>
             </div>
           ))}
         </div>
