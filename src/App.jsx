@@ -18,12 +18,9 @@ const router = createBrowserRouter([
     element: <ProtectedRoute><DashboardLayout /></ProtectedRoute>,
     children: [
       { index: true, element: <NewAudits /> },
-      { path: 'manage', element: <ManageAudits /> }
+      { path: 'manage', element: <ManageAudits /> },
+      { path: 'audit/:id', element: <AuditDetail /> }
     ]
-  },
-  {
-    path: '/audit/:id',
-    element: <ProtectedRoute><AuditDetail /></ProtectedRoute>
   }
 ]);
 
