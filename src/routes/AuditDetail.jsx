@@ -30,7 +30,7 @@ function NcBadge({ status }) {
 }
 
 /* ---------- Single NC card ---------- */
-function NcCard({ nc, index, auditId, appId, onNcClosed, isAuditComplete }) {
+function NcCard({ nc, index, auditId, appId, onNcClosed }) {
   const [open, setOpen] = useState(true);
   const [closing, setClosing] = useState(false);
   const hasCorrectionDoc = nc.correction_document_url || nc.client_response_url;
@@ -142,7 +142,7 @@ function NcCard({ nc, index, auditId, appId, onNcClosed, isAuditComplete }) {
           )}
 
           {/* Action button to Close NC */}
-          {!isAuditComplete && !isClosed && (
+          {!isClosed && (
             <div style={{ marginTop: 4 }}>
               <button
                 type="button"
@@ -210,17 +210,11 @@ export default function AuditDetail() {
   }
 
   const ncReports = Array.isArray(audit.nc_reports) ? audit.nc_reports : [];
-  const unclosedNcs = ncReports.filter(r => r.status !== 'closed');
-  const hasUnclosedNc = unclosedNcs.length > 0;
   const isComplete = audit.status?.includes('complete') || audit.status?.includes('done') || Boolean(audit.completed_at || audit.completedAt);
   const appId = audit.application_id?._id || audit.application_id;
 
   /* Mark as Audited */
   const handleComplete = async () => {
-    if (hasUnclosedNc) {
-      alert('Please mark all Non-Conformity reports as Closed before marking the audit as audited.');
-      return;
-    }
     setSubmitting(true);
     try {
       await completeAudit(audit._id || audit.id);
@@ -271,7 +265,7 @@ export default function AuditDetail() {
       return {
         ...a,
         nc_reports: updated,
-        status: allClosed ? 'nc_closed' : a.status
+        status: allClosed ? (isComplete ? 'audit_completed' : 'nc_closed') : a.status
       };
     });
   };
@@ -349,20 +343,49 @@ export default function AuditDetail() {
           ))}
         </div>
 
+        {/* Mark as Audited / Completed - Comes First */}
+        <div style={{ marginBottom: 16 }}>
+          {!isComplete ? (
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowConfirm(true)}
+              style={{
+                borderRadius: 14,
+                padding: '14px',
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                fontSize: 15,
+                fontWeight: 700
+              }}
+            >
+              <CheckCircle size={18} />
+              Mark as Audited
+            </button>
+          ) : (
+            <div className="card" style={{ textAlign: 'center', background: 'var(--status-done-bg)', border: '1px solid var(--primary-border)', padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <CheckCircle size={18} color="var(--primary)" />
+                <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: 14 }}>Audit Completed / Audited</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* NC Reports Section */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <p className="section-heading" style={{ margin: 0 }}>
               Non-Conformity Reports ({ncReports.length})
             </p>
-            {!isComplete && (
-              <button
-                onClick={() => { setShowNcForm(v => !v); setFlagError(''); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: showNcForm ? '#fef2f2' : 'var(--primary-subtle)', color: showNcForm ? '#dc2626' : 'var(--primary)', border: `1px solid ${showNcForm ? '#fecaca' : 'var(--primary-border)'}`, borderRadius: 10, padding: '7px 13px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-              >
-                {showNcForm ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Flag NC</>}
-              </button>
-            )}
+            <button
+              onClick={() => { setShowNcForm(v => !v); setFlagError(''); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: showNcForm ? '#fef2f2' : 'var(--primary-subtle)', color: showNcForm ? '#dc2626' : 'var(--primary)', border: `1px solid ${showNcForm ? '#fecaca' : 'var(--primary-border)'}`, borderRadius: 10, padding: '7px 13px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              {showNcForm ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Flag NC</>}
+            </button>
           </div>
 
           {/* Flag NC form */}
@@ -424,7 +447,6 @@ export default function AuditDetail() {
                   auditId={audit._id || audit.id}
                   appId={appId}
                   onNcClosed={handleNcClosed}
-                  isAuditComplete={isComplete}
                 />
               ))}
             </div>
@@ -435,70 +457,12 @@ export default function AuditDetail() {
             </div>
           )}
         </div>
-
-        {/* Warning banner when NCs are unclosed */}
-        {hasUnclosedNc && !isComplete && (
-          <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#991b1b', margin: '0 0 3px 0' }}>Action Required: Close NCs First</p>
-              <p style={{ fontSize: 12, color: '#b91c1c', margin: 0, lineHeight: 1.4 }}>
-                You must review the client's correction and click <strong>"Mark NC as Closed"</strong> on all open NC reports before you can mark this audit as audited.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Success banner when all NCs are closed */}
-        {!hasUnclosedNc && ncReports.length > 0 && !isComplete && (
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ShieldCheck size={18} color="#16a34a" style={{ flexShrink: 0 }} />
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#166534', margin: '0 0 2px 0' }}>All NCs Closed & Resolved ✅</p>
-              <p style={{ fontSize: 12, color: '#15803d', margin: 0 }}>
-                All non-conformity reports have been closed. You may now proceed to mark this audit as audited.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Mark as Audited / Completed */}
-        {!isComplete && (
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              if (hasUnclosedNc) {
-                alert('Please mark all Non-Conformity reports as Closed before marking the audit as audited.');
-                return;
-              }
-              setShowConfirm(true);
-            }}
-            disabled={hasUnclosedNc}
-            style={{
-              marginTop: 4,
-              borderRadius: 14,
-              padding: '14px',
-              opacity: hasUnclosedNc ? 0.5 : 1,
-              cursor: hasUnclosedNc ? 'not-allowed' : 'pointer'
-            }}
-          >
-            <CheckCircle size={18} />
-            Mark as Audited
-          </button>
-        )}
-
-        {isComplete && (
-          <div className="card" style={{ textAlign: 'center', background: 'var(--status-done-bg)', border: '1px solid var(--primary-border)' }}>
-            <CheckCircle size={22} color="var(--primary)" style={{ marginBottom: 6 }} />
-            <p style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 14, margin: 0 }}>Audit completed</p>
-          </div>
-        )}
       </div>
 
       {showConfirm && (
         <ConfirmDialog
           title="Mark as Audited"
-          message="Mark this audit as audited and clean with all non-conformances resolved and closed?"
+          message="Mark this audit as audited and conclude the physical audit inspection?"
           confirmLabel={submitting ? 'Please wait…' : 'Yes, Mark as Audited'}
           onConfirm={handleComplete}
           onCancel={() => setShowConfirm(false)}
