@@ -218,6 +218,7 @@ export default function AuditDetail() {
 
   const ncReports = Array.isArray(audit.nc_reports) ? audit.nc_reports : [];
   const isComplete = audit.status?.includes('complete') || audit.status?.includes('done') || Boolean(audit.completed_at || audit.completedAt);
+  const hasClosedNc = ncReports.some(r => r.status === 'closed');
   const appId = audit.application_id?._id || audit.application_id;
 
   /* Mark as Audited */
@@ -389,8 +390,18 @@ export default function AuditDetail() {
               Non-Conformity Reports ({ncReports.length})
             </p>
             <button
-              onClick={() => { setShowNcForm(v => !v); setFlagError(''); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: showNcForm ? '#fef2f2' : 'var(--primary-subtle)', color: showNcForm ? '#dc2626' : 'var(--primary)', border: `1px solid ${showNcForm ? '#fecaca' : 'var(--primary-border)'}`, borderRadius: 10, padding: '7px 13px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              onClick={() => { if (!hasClosedNc) { setShowNcForm(v => !v); setFlagError(''); } }}
+              disabled={hasClosedNc}
+              title={hasClosedNc ? 'NC has been closed — no further NCs can be flagged' : ''}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: hasClosedNc ? '#f1f5f9' : (showNcForm ? '#fef2f2' : 'var(--primary-subtle)'),
+                color: hasClosedNc ? '#94a3b8' : (showNcForm ? '#dc2626' : 'var(--primary)'),
+                border: `1px solid ${hasClosedNc ? '#e2e8f0' : (showNcForm ? '#fecaca' : 'var(--primary-border)')}`,
+                borderRadius: 10, padding: '7px 13px', fontSize: 12, fontWeight: 700,
+                cursor: hasClosedNc ? 'not-allowed' : 'pointer',
+                opacity: hasClosedNc ? 0.6 : 1
+              }}
             >
               {showNcForm ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Flag NC</>}
             </button>
