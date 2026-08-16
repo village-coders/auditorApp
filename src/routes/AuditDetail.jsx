@@ -10,6 +10,7 @@ import {
   ChevronUp, ExternalLink, MessageSquare, Paperclip,
   CheckCheck, ShieldCheck
 } from 'lucide-react';
+import Toast from '../components/Toast';
 
 /* ---------- NC status helpers ---------- */
 const NC_STATUS_STYLES = {
@@ -33,6 +34,7 @@ function NcBadge({ status }) {
 function NcCard({ nc, index, auditId, appId, onNcClosed }) {
   const [open, setOpen] = useState(true);
   const [closing, setClosing] = useState(false);
+  const [ncToast, setNcToast] = useState(null);
   const hasCorrectionDoc = nc.correction_document_url || nc.client_response_url;
   const hasResponse = nc.client_response || hasCorrectionDoc;
   const isResponded = nc.status === 'corrected' || nc.status === 'client_responded' || nc.status === 'closed';
@@ -46,14 +48,16 @@ function NcCard({ nc, index, auditId, appId, onNcClosed }) {
       await closeNc(auditId, appId, nc._id);
       onNcClosed(nc._id);
     } catch (err) {
-      alert(err.message || 'Failed to close NC');
+      setNcToast({ message: err.message || 'Failed to close NC', type: 'error' });
     } finally {
       setClosing(false);
     }
   };
 
   return (
-    <div style={{ border: `1.5px solid ${isClosed ? '#bbf7d0' : (isResponded ? '#fde68a' : '#fecaca')}`, borderRadius: 14, overflow: 'hidden', background: 'var(--card-bg)' }}>
+    <>
+      <Toast message={ncToast?.message} type={ncToast?.type} onClose={() => setNcToast(null)} />
+      <div style={{ border: `1.5px solid ${isClosed ? '#bbf7d0' : (isResponded ? '#fde68a' : '#fecaca')}`, borderRadius: 14, overflow: 'hidden', background: 'var(--card-bg)' }}>
       {/* Header row */}
       <div
         onClick={() => setOpen(o => !o)}
@@ -179,6 +183,7 @@ function NcCard({ nc, index, auditId, appId, onNcClosed }) {
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -197,6 +202,8 @@ export default function AuditDetail() {
   const [ncFile, setNcFile] = useState(null);
   const [flagging, setFlagging] = useState(false);
   const [flagError, setFlagError] = useState('');
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
 
   if (!audit) {
     return (
@@ -221,7 +228,7 @@ export default function AuditDetail() {
       setAudit(a => ({ ...a, status: 'audit_completed', completed_at: new Date().toISOString() }));
       setShowConfirm(false);
     } catch (err) {
-      alert(err.message || 'Failed to complete audit');
+      showToast(err.message || 'Failed to complete audit', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -299,6 +306,7 @@ export default function AuditDetail() {
 
   return (
     <>
+      <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
       <div className="app-content" style={{ paddingBottom: 100 }}>
 
         {/* Back + title row */}
