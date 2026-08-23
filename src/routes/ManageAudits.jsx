@@ -37,7 +37,7 @@ export default function ManageAudits() {
             );
           });
 
-          return matchesInspector || matchesInspectorEmail || matchesAuditors || (!a.inspector_id && (!a.auditors || a.auditors.length === 0));
+          return Boolean(matchesInspector || matchesInspectorEmail || matchesAuditors);
         });
         setAudits(mine);
       })

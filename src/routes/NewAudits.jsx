@@ -37,8 +37,8 @@ export default function NewAudits() {
             );
           });
 
-          // Show audit if explicitly assigned, or if user is logged in and no restricted auditor is assigned
-          const isMine = matchesInspector || matchesInspectorEmail || matchesAuditors || (!a.inspector_id && (!a.auditors || a.auditors.length === 0));
+          // Show audit if explicitly assigned to the logged in auditor
+          const isMine = Boolean(matchesInspector || matchesInspectorEmail || matchesAuditors);
           const isNew = !['inspection_completed', 'done', 'complete'].some(s => (a.status || '').toLowerCase().includes(s));
           return isMine && isNew;
         });
