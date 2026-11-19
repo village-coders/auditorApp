@@ -19,13 +19,14 @@ export default function NewAudits() {
         const userName = (user?.full_name || user?.username || '').toLowerCase();
 
         const myNew = all.filter(a => {
+          const isKfc = Boolean(a.is_kfc) || (a.company_name || '').toUpperCase().includes('KFC');
           const inspectorIdStr = String(a.inspector_id?._id || a.inspector_id?.id || a.inspector_id || '');
           const inspectorEmail = a.inspector_id?.email?.toLowerCase();
 
           const matchesInspector = userId && inspectorIdStr === userId;
           const matchesInspectorEmail = userEmail && inspectorEmail && inspectorEmail === userEmail;
 
-          const matchesAuditors = Array.isArray(a.auditors) && a.auditors.some(aud => {
+          const matchesAuditors = Array.isArray(a.auditors) ? a.auditors.some(aud => {
             const audIdStr = String(aud?._id || aud?.id || aud || '');
             const audEmail = aud?.email?.toLowerCase();
             const audName = (aud?.name || aud?.full_name || '').toLowerCase();
@@ -35,11 +36,11 @@ export default function NewAudits() {
               (userEmail && audEmail && audEmail === userEmail) ||
               (userName && audName && audName === userName)
             );
-          });
+          }) : (typeof a.auditors === 'string' && (userName && a.auditors.toLowerCase().includes(userName) || a.auditors.toLowerCase().includes('lead auditor')));
 
-          // Show audit if explicitly assigned to the logged in auditor
-          const isMine = Boolean(matchesInspector || matchesInspectorEmail || matchesAuditors);
-          const isNew = !['inspection_completed', 'done', 'complete'].some(s => (a.status || '').toLowerCase().includes(s));
+          // Show audit if assigned or if KFC logsheet/audit
+          const isMine = isKfc || Boolean(matchesInspector || matchesInspectorEmail || matchesAuditors);
+          const isNew = !['inspection_completed', 'done', 'complete', 'completed'].some(s => (a.status || '').toLowerCase().includes(s));
           return isMine && isNew;
         });
         setAudits(myNew);
